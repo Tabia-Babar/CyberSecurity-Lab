@@ -2,5 +2,6 @@
 __pycache__/
 venv/
 *.pyc
+database.db
 uploads/*
 !uploads/.gitkeep

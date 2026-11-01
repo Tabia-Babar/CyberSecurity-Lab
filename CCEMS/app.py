@@ -1,7 +1,6 @@
-import os, re, uuid, hashlib
+import os, re, uuid, hashlib, sqlite3
 from datetime import datetime, date
 from functools import wraps
-import mysql.connector
 from dotenv import load_dotenv
 from flask import (Flask, g, render_template, request, redirect, url_for, flash,
                    abort, send_from_directory, send_file)
@@ -38,16 +37,17 @@ login_manager.login_view = "login"
 
 # ------------------------------------------------------------------ DATABASE
 def db_config():
-    return dict(host=os.getenv("MYSQLHOST", "localhost"),
-                port=int(os.getenv("MYSQLPORT", 3306)),
-                user=os.getenv("MYSQLUSER", "root"),
-                password=os.getenv("MYSQLPASSWORD", ""),
-                database=os.getenv("MYSQLDATABASE", "ccems_db"))
+    configured = os.getenv("SQLITE_DATABASE", os.getenv("DATABASE_PATH", "database.db"))
+    path = configured if os.path.isabs(configured) else os.path.join(BASE_DIR, configured)
+    return {"database": os.path.abspath(path)}
 
 
 def get_db():
-    if "db" not in g:  # one connection per request (not one global cursor)
-        g.db = mysql.connector.connect(**db_config())
+    if "db" not in g:  # one connection per request
+        conn = sqlite3.connect(db_config()["database"])
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        g.db = conn
     return g.db
 
 
@@ -59,42 +59,29 @@ def close_db(exc=None):
 
 
 def query(sql, args=(), one=False):
-    cur = get_db().cursor(dictionary=True)
-    cur.execute(sql, args)
-    rows = cur.fetchall()
-    cur.close()
+    sql = sql.replace("%s", "?")
+    rows = get_db().execute(sql, args).fetchall()
     if one:
-        return rows[0] if rows else None
-    return rows
+        return dict(rows[0]) if rows else None
+    return [dict(row) for row in rows]
 
 
 def execute(sql, args=()):
+    sql = sql.replace("%s", "?")
     conn = get_db()
-    cur = conn.cursor()
-    cur.execute(sql, args)
+    cur = conn.execute(sql, args)
     conn.commit()
-    last = cur.lastrowid
-    cur.close()
-    return last
+    return cur.lastrowid
 
 
 def ensure_schema():
-    """Create database + tables if they do not exist (safe to run many times)."""
-    cfg = db_config()
-    try:
-        c = mysql.connector.connect(host=cfg["host"], port=cfg["port"],
-                                    user=cfg["user"], password=cfg["password"])
-        c.cursor().execute(f"CREATE DATABASE IF NOT EXISTS `{cfg['database']}`")
-        c.close()
-    except Exception as e:  # on hosted DB the database already exists
-        print("DB create skipped:", e)
-    conn = mysql.connector.connect(**cfg)
-    cur = conn.cursor()
+    """Create SQLite tables if they do not exist (safe to run many times)."""
+    database = db_config()["database"]
+    os.makedirs(os.path.dirname(database), exist_ok=True)
+    conn = sqlite3.connect(database)
+    conn.execute("PRAGMA foreign_keys = ON")
     with open(os.path.join(BASE_DIR, "schema.sql"), encoding="utf-8") as f:
-        for stmt in f.read().split(";"):
-            if stmt.strip():
-                cur.execute(stmt)
-    conn.commit()
+        conn.executescript(f.read())
     conn.close()
 
 
@@ -138,7 +125,14 @@ def log(action, case_id=None, details=""):
 
 @app.template_filter("dt")
 def fmt_dt(v, f="%Y-%m-%d %H:%M"):
-    return v.strftime(f) if v else "-"
+    if not v:
+        return "-"
+    if isinstance(v, str):
+        try:
+            v = datetime.fromisoformat(v.replace("Z", "+00:00"))
+        except ValueError:
+            return v
+    return v.strftime(f)
 
 
 @app.context_processor
@@ -240,8 +234,9 @@ def dashboard():
                   " GROUP BY c.case_type ORDER BY n DESC", a)
     status = query("SELECT c.status label, COUNT(*) n FROM cases c WHERE 1=1" + cond +
                    " GROUP BY c.status", a)
-    monthly = query("SELECT YEAR(c.created_at) y, MONTH(c.created_at) m, COUNT(*) n FROM cases c "
-                    "WHERE c.created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)" + cond +
+    monthly = query("SELECT CAST(strftime('%Y', c.created_at) AS INTEGER) y, "
+                    "CAST(strftime('%m', c.created_at) AS INTEGER) m, COUNT(*) n FROM cases c "
+                    "WHERE c.created_at >= date('now', '-12 months')" + cond +
                     " GROUP BY y, m ORDER BY y, m", a)
     chart = {
         "types": {"labels": [r["label"] for r in types], "values": [r["n"] for r in types]},
@@ -680,8 +675,8 @@ def report_monthly():
     if not re.fullmatch(r"\d{4}-\d{2}", month):
         abort(400)
     y, m = int(month[:4]), int(month[5:])
-    rows = query(CASE_SQL + " WHERE YEAR(c.created_at)=%s AND MONTH(c.created_at)=%s ORDER BY c.created_at",
-                 (y, m))
+    rows = query(CASE_SQL + " WHERE strftime('%Y', c.created_at)=? AND strftime('%m', c.created_at)=? ORDER BY c.created_at",
+                 (str(y), f"{m:02d}"))
     by_type, by_status = {}, {}
     for r in rows:
         by_type[r["case_type"]] = by_type.get(r["case_type"], 0) + 1

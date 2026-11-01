@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block content %}
+<h3>Activity Logs (Audit Trail)</h3>
+<div class="table-responsive"><table class="table table-sm bg-white">
+<tr><th>Time</th><th>User</th><th>Action</th><th>Case</th><th>Details</th></tr>
+{% for l in logs %}<tr><td>{{ l.timestamp|dt('%Y-%m-%d %H:%M:%S') }}</td><td>{{ l.name or '-' }}</td>
+<td>{{ l.action }}</td><td>{{ l.case_number or '-' }}</td><td>{{ l.details }}</td></tr>{% endfor %}
+</table></div>{% endblock %}

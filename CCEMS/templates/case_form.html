@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block content %}
+<h3>{{ 'Edit ' + case.case_number if case else 'Register New Case' }}</h3>
+<form method="post" class="card p-3"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+ <div class="row">
+  <div class="col-md-8 mb-2"><label>Title *</label><input class="form-control" name="title" maxlength="200" value="{{ form.get('title','') }}" required></div>
+  <div class="col-md-4 mb-2"><label>Crime Type *</label><select class="form-select" name="case_type">
+   {% for x in crime_types %}<option {{ 'selected' if form.get('case_type')==x }}>{{ x }}</option>{% endfor %}</select></div>
+  <div class="col-md-4 mb-2"><label>Complainant Name *</label><input class="form-control" name="complainant_name" value="{{ form.get('complainant_name','') }}" required></div>
+  <div class="col-md-4 mb-2"><label>Contact Number</label><input class="form-control" name="contact_number" value="{{ form.get('contact_number') or '' }}"></div>
+  <div class="col-md-4 mb-2"><label>Priority</label><select class="form-select" name="priority">
+   {% for x in priorities %}<option {{ 'selected' if (form.get('priority') or 'Medium')==x }}>{{ x }}</option>{% endfor %}</select></div>
+ </div>
+ <label>Description</label><textarea class="form-control mb-2" name="description" rows="5">{{ form.get('description') or '' }}</textarea>
+ <div class="row">
+  {% if case %}<div class="col-md-4 mb-2"><label>Status</label><select class="form-select" name="status">
+   {% for x in statuses %}<option {{ 'selected' if case.status==x }}>{{ x }}</option>{% endfor %}</select></div>{% endif %}
+  {% if current_user.role == 'admin' %}<div class="col-md-4 mb-2"><label>Assigned Officer</label><select class="form-select" name="officer_id">
+   <option value="">Unassigned</option>
+   {% for o in officers %}<option value="{{ o.id }}" {{ 'selected' if case and case.officer_id==o.id }}>{{ o.name }} ({{ o.designation }})</option>{% endfor %}</select></div>{% endif %}
+ </div>
+ <div><button class="btn btn-primary">Save</button> <a class="btn btn-light" href="{{ url_for('cases') }}">Cancel</a></div>
+</form>{% endblock %}

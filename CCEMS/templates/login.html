@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block content %}
+<div class="col-md-4 mx-auto card p-4 mt-5 shadow-sm">
+<h4 class="text-center">🛡️ CCEMS</h4>
+<p class="text-center text-muted small">Cybercrime Case &amp; Evidence Management System</p>
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+ <input class="form-control mb-2" type="email" name="email" placeholder="Email" required autofocus>
+ <input class="form-control mb-3" type="password" name="password" placeholder="Password" required>
+ <button class="btn btn-dark w-100">Login</button></form></div>{% endblock %}

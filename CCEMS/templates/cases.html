@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block content %}
+<div class="d-flex justify-content-between mb-2"><h3>Cases</h3>
+{% if current_user.role in ('admin','investigator') %}<a class="btn btn-primary" href="{{ url_for('case_new') }}">+ Register Case</a>{% endif %}</div>
+<form class="row g-2 mb-3" method="get">
+ <div class="col-md-3"><input class="form-control" name="q" value="{{ f.q }}" placeholder="Case no / complainant / title"></div>
+ <div class="col-md-2"><select class="form-select" name="type"><option value="">All types</option>
+  {% for x in crime_types %}<option {{ 'selected' if x==f.type }}>{{ x }}</option>{% endfor %}</select></div>
+ <div class="col-md-2"><select class="form-select" name="status"><option value="">All status</option>
+  {% for x in statuses %}<option {{ 'selected' if x==f.status }}>{{ x }}</option>{% endfor %}</select></div>
+ <div class="col-md-2"><input type="date" class="form-control" name="from" value="{{ f.d_from }}" title="From"></div>
+ <div class="col-md-2"><input type="date" class="form-control" name="to" value="{{ f.d_to }}" title="To"></div>
+ <div class="col-md-1"><button class="btn btn-dark w-100">Go</button></div>
+</form>
+<div class="table-responsive"><table class="table table-hover bg-white align-middle">
+<thead><tr><th>Case No</th><th>Title</th><th>Complainant</th><th>Type</th><th>Priority</th><th>Status</th><th>Officer</th><th>Registered</th></tr></thead>
+{% for c in cases %}
+<tr><td><a href="{{ url_for('case_view', cid=c.id) }}">{{ c.case_number }}</a></td><td>{{ c.title }}</td>
+<td>{{ c.complainant_name }}</td><td>{{ c.case_type }}</td><td>{{ c.priority }}</td>
+<td><span class="badge bg-{{ {'Pending':'warning','Investigating':'primary','Resolved':'success'}[c.status] }}">{{ c.status }}</span></td>
+<td>{{ c.officer_name or '-' }}</td><td>{{ c.created_at|dt('%Y-%m-%d') }}</td></tr>
+{% else %}<tr><td colspan="8" class="text-center text-muted">No cases found</td></tr>{% endfor %}
+</table></div>{% endblock %}

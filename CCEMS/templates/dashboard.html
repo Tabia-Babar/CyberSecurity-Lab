@@ -1,0 +1,36 @@
+{% extends "base.html" %}{% block content %}
+<h3 class="mb-3">Dashboard</h3>
+<div class="row g-3">
+ {% for label, val, color in [('Total Cases', stats.total, '#0d6efd'), ('Pending', stats.pending, '#ffc107'),
+   ('Under Investigation', stats.investigating, '#fd7e14'), ('Resolved', stats.resolved, '#198754'),
+   ('Evidence Files', stats.evidence, '#6f42c1'), ('Investigation Officers', stats.officers, '#20c997')] %}
+ <div class="col-6 col-lg-2"><div class="card stat p-3" style="border-left-color:{{ color }}">
+   <h2>{{ val }}</h2><small class="text-muted">{{ label }}</small></div></div>
+ {% endfor %}
+</div>
+<div class="row g-3 mt-1">
+ <div class="col-md-4"><div class="card p-3"><h6>Cases by Crime Type</h6><canvas id="typeChart"></canvas></div></div>
+ <div class="col-md-4"><div class="card p-3"><h6>Monthly Registered Cases</h6><canvas id="monthChart"></canvas></div></div>
+ <div class="col-md-4"><div class="card p-3"><h6>Cases by Status</h6><canvas id="statusChart"></canvas></div></div>
+</div>
+<div class="card p-3 mt-3"><h6>Recent Cases</h6>
+ {% for c in recent %}
+ <a class="py-1" href="{{ url_for('case_view', cid=c.id) }}">{{ c.case_number }} — {{ c.title }}
+  <span class="badge bg-secondary">{{ c.status }}</span></a>
+ {% else %}<span class="text-muted">No cases yet.</span>{% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+const chart = {{ chart|tojson }};
+const pal = ['#0d6efd','#dc3545','#ffc107','#198754','#6f42c1','#fd7e14','#20c997','#6c757d'];
+new Chart(document.getElementById('typeChart'), {type:'pie',
+  data:{labels:chart.types.labels, datasets:[{data:chart.types.values, backgroundColor:pal}]}});
+new Chart(document.getElementById('monthChart'), {type:'bar',
+  data:{labels:chart.monthly.labels, datasets:[{label:'Cases', data:chart.monthly.values, backgroundColor:'#0d6efd'}]},
+  options:{scales:{y:{beginAtZero:true, ticks:{precision:0}}}, plugins:{legend:{display:false}}}});
+new Chart(document.getElementById('statusChart'), {type:'doughnut',
+  data:{labels:chart.status.labels, datasets:[{data:chart.status.values, backgroundColor:['#ffc107','#fd7e14','#198754']}]}});
+</script>
+{% endblock %}

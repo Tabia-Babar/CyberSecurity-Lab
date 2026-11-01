@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block content %}
+<h3>Reports</h3>
+<div class="row g-3 mt-1">
+ <div class="col-md-4"><div class="card p-3"><h6>Total Cases Summary</h6>
+  <a class="btn btn-outline-dark btn-sm" href="{{ url_for('report_summary') }}">Download PDF</a></div></div>
+ <div class="col-md-4"><div class="card p-3"><h6>Monthly Crime Report</h6>
+  <form method="get" action="{{ url_for('report_monthly') }}" class="d-flex gap-2">
+   <input type="month" name="month" value="{{ this_month }}" class="form-control form-control-sm">
+   <button class="btn btn-outline-dark btn-sm">PDF</button></form></div></div>
+ <div class="col-md-4"><div class="card p-3"><h6>Officer Performance Report</h6>
+  <a class="btn btn-outline-dark btn-sm" href="{{ url_for('report_officers') }}">Download PDF</a></div></div>
+ <div class="col-md-4"><div class="card p-3"><h6>Evidence Report</h6>
+  <a class="btn btn-outline-dark btn-sm" href="{{ url_for('report_evidence') }}">Download PDF</a></div></div>
+ <div class="col-md-4"><div class="card p-3"><h6>Individual Case Report</h6>
+  <small class="text-muted">Open any case and click "PDF Report".</small></div></div>
+</div>{% endblock %}

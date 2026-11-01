@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% block content %}
+<div class="d-flex justify-content-between flex-wrap gap-2">
+ <h3>{{ case.case_number }} — {{ case.title }}</h3>
+ <div>
+  <a class="btn btn-outline-dark btn-sm" href="{{ url_for('report_case', cid=case.id) }}">📄 PDF Report</a>
+  {% if can_edit %}<a class="btn btn-warning btn-sm" href="{{ url_for('case_edit', cid=case.id) }}">Edit / Update Status</a>{% endif %}
+  {% if current_user.role == 'admin' %}
+  <form method="post" action="{{ url_for('case_delete', cid=case.id) }}" class="d-inline" onsubmit="return confirm('Delete this case and all its evidence?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+   <button class="btn btn-danger btn-sm">Delete</button></form>{% endif %}
+ </div>
+</div>
+<div class="card p-3 my-3">
+ <div class="row">
+  <div class="col-md-4"><b>Type:</b> {{ case.case_type }}</div>
+  <div class="col-md-4"><b>Priority:</b> {{ case.priority }}</div>
+  <div class="col-md-4"><b>Status:</b> <span class="badge bg-primary">{{ case.status }}</span></div>
+  <div class="col-md-4"><b>Complainant:</b> {{ case.complainant_name }}</div>
+  <div class="col-md-4"><b>Contact:</b> {{ case.contact_number or '-' }}</div>
+  <div class="col-md-4"><b>Officer:</b> {{ case.officer_name or 'Unassigned' }}</div>
+  <div class="col-md-4"><b>Registered:</b> {{ case.created_at|dt }}</div>
+  <div class="col-md-4"><b>Updated:</b> {{ case.updated_at|dt }}</div>
+ </div><hr><div style="white-space:pre-wrap">{{ case.description }}</div>
+</div>
+<h5>Evidence</h5>
+{% if can_ev %}
+<form method="post" action="{{ url_for('evidence_upload', cid=case.id) }}" enctype="multipart/form-data" class="row g-2 mb-3"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+ <div class="col-md-4"><input type="file" class="form-control" name="file" accept=".jpg,.jpeg,.png,.pdf" required></div>
+ <div class="col-md-5"><input class="form-control" name="description" placeholder="Evidence description"></div>
+ <div class="col-md-3"><button class="btn btn-success w-100">Upload + SHA-256</button></div>
+</form>{% endif %}
+<div class="table-responsive"><table class="table bg-white align-middle">
+<tr><th>File</th><th>Description</th><th>SHA-256</th><th>Uploaded by</th><th>Holder</th><th></th></tr>
+{% for e in evidence %}
+<tr><td>{{ e.file_name }}</td><td>{{ e.description }}</td><td class="hash">{{ e.file_hash }}</td>
+<td>{{ e.uploader_name or '-' }}<br><small>{{ e.uploaded_at|dt }}</small></td><td>{{ e.holder_name or '-' }}</td>
+<td>{% if can_ev %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('evidence_view', eid=e.id) }}">Open</a>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="text-muted text-center">No evidence yet</td></tr>{% endfor %}
+</table></div>
+<h5 class="mt-4">Case Tracking Timeline</h5>
+<ul class="list-group">
+{% for t in timeline %}<li class="list-group-item small"><b>{{ t.timestamp|dt }}</b> — {{ t.name or 'System' }}: {{ t.action }} <span class="text-muted">{{ t.details }}</span></li>
+{% else %}<li class="list-group-item text-muted">No activity yet</li>{% endfor %}
+</ul>{% endblock %}

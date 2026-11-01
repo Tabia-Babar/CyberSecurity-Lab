@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% block content %}
+<a href="{{ url_for('case_view', cid=case.id) }}">← {{ case.case_number }}</a>
+<h3 class="mt-2">{{ e.file_name }}</h3>
+<div class="card p-3 mb-3">
+ <p><b>Description:</b> {{ e.description or '-' }}</p>
+ <p><b>Size:</b> {{ e.file_size }} bytes | <b>Uploaded:</b> {{ e.uploaded_at|dt }} by {{ e.uploader_name or '-' }}</p>
+ <p><b>SHA-256 (recorded at upload):</b><br><span class="hash">{{ e.file_hash }}</span></p>
+ <p><b>Current holder:</b> {{ e.holder_name or '-' }}</p>
+ {% if is_image %}<img src="{{ url_for('evidence_file', eid=e.id) }}" class="img-fluid mb-3" style="max-height:300px;object-fit:contain" alt="evidence">{% endif %}
+ <div>
+  <a class="btn btn-outline-primary btn-sm" href="{{ url_for('evidence_download', eid=e.id) }}">⬇ Download</a>
+  <form method="post" action="{{ url_for('evidence_verify', eid=e.id) }}" class="d-inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+   <button class="btn btn-success btn-sm">🔍 Verify Integrity</button></form>
+ </div>
+</div>
+<h5>Transfer Custody</h5>
+<form method="post" action="{{ url_for('evidence_transfer', eid=e.id) }}" class="row g-2 mb-4"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+ <div class="col-md-4"><select class="form-select" name="to_user">
+  {% for p in people %}<option value="{{ p.id }}">{{ p.name }} ({{ ROLES[p.role] }})</option>{% endfor %}</select></div>
+ <div class="col-md-5"><input class="form-control" name="note" placeholder="Reason for transfer"></div>
+ <div class="col-md-3"><button class="btn btn-dark w-100">Transfer</button></div>
+</form>
+<h5>Chain of Custody</h5>
+<div class="table-responsive"><table class="table table-sm bg-white">
+<tr><th>Time</th><th>Action</th><th>By</th><th>Transferred to</th><th>Note</th></tr>
+{% for l in logs %}<tr><td>{{ l.timestamp|dt('%Y-%m-%d %H:%M:%S') }}</td><td>{{ l.action }}</td>
+<td>{{ l.actor or '-' }}</td><td>{{ l.target or '-' }}</td><td>{{ l.note }}</td></tr>{% endfor %}
+</table></div>{% endblock %}

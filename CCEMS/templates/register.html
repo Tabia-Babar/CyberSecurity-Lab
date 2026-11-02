@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block content %}
+<div class="col-md-5 mx-auto card p-4 mt-4 shadow-sm">
+<h4>Create Complainant Account</h4>
+<p class="text-muted small">Register to file a cybercrime complaint and track its progress.</p>
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+ <input class="form-control mb-2" name="name" placeholder="Full name" required>
+ <input class="form-control mb-2" type="email" name="email" placeholder="Email" required>
+ <input class="form-control mb-2" type="password" name="password" minlength="8" placeholder="Password (min 8)" required>
+ <input class="form-control mb-3" type="password" name="password2" minlength="8" placeholder="Confirm password" required>
+ <button class="btn btn-primary w-100">Create Account</button>
+</form>
+<p class="text-center small mt-3">Already registered? <a href="{{ url_for('login') }}">Login</a></p>
+</div>{% endblock %}

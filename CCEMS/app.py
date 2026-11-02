@@ -1,6 +1,7 @@
-import os, re, uuid, hashlib, sqlite3
+import os, re, uuid, hashlib
 from datetime import datetime, date
 from functools import wraps
+import mysql.connector
 from dotenv import load_dotenv
 from flask import (Flask, g, render_template, request, redirect, url_for, flash,
                    abort, send_from_directory, send_file)
@@ -25,7 +26,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".pdf"}
 
 ROLES = {"admin": "Admin", "investigator": "Investigation Officer",
-         "evidence_officer": "Evidence Officer", "viewer": "Viewer"}
+         "evidence_officer": "Evidence Officer", "viewer": "Viewer",
+         "citizen": "Complainant (Citizen)"}
 STATUSES = ["Pending", "Investigating", "Resolved"]
 PRIORITIES = ["Low", "Medium", "High", "Critical"]
 CRIME_TYPES = ["Hacking", "Phishing", "Online Fraud", "Identity Theft", "Cyber Bullying",
@@ -37,17 +39,16 @@ login_manager.login_view = "login"
 
 # ------------------------------------------------------------------ DATABASE
 def db_config():
-    configured = os.getenv("SQLITE_DATABASE", os.getenv("DATABASE_PATH", "database.db"))
-    path = configured if os.path.isabs(configured) else os.path.join(BASE_DIR, configured)
-    return {"database": os.path.abspath(path)}
+    return dict(host=os.getenv("MYSQLHOST", "localhost"),
+                port=int(os.getenv("MYSQLPORT", 3306)),
+                user=os.getenv("MYSQLUSER", "root"),
+                password=os.getenv("MYSQLPASSWORD", ""),
+                database=os.getenv("MYSQLDATABASE", "ccems_db"))
 
 
 def get_db():
-    if "db" not in g:  # one connection per request
-        conn = sqlite3.connect(db_config()["database"])
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        g.db = conn
+    if "db" not in g:  # one connection per request (not one global cursor)
+        g.db = mysql.connector.connect(**db_config())
     return g.db
 
 
@@ -59,29 +60,47 @@ def close_db(exc=None):
 
 
 def query(sql, args=(), one=False):
-    sql = sql.replace("%s", "?")
-    rows = get_db().execute(sql, args).fetchall()
+    cur = get_db().cursor(dictionary=True)
+    cur.execute(sql, args)
+    rows = cur.fetchall()
+    cur.close()
     if one:
-        return dict(rows[0]) if rows else None
-    return [dict(row) for row in rows]
+        return rows[0] if rows else None
+    return rows
 
 
 def execute(sql, args=()):
-    sql = sql.replace("%s", "?")
     conn = get_db()
-    cur = conn.execute(sql, args)
+    cur = conn.cursor()
+    cur.execute(sql, args)
     conn.commit()
-    return cur.lastrowid
+    last = cur.lastrowid
+    cur.close()
+    return last
 
 
 def ensure_schema():
-    """Create SQLite tables if they do not exist (safe to run many times)."""
-    database = db_config()["database"]
-    os.makedirs(os.path.dirname(database), exist_ok=True)
-    conn = sqlite3.connect(database)
-    conn.execute("PRAGMA foreign_keys = ON")
+    """Create database + tables if they do not exist (safe to run many times)."""
+    cfg = db_config()
+    try:
+        c = mysql.connector.connect(host=cfg["host"], port=cfg["port"],
+                                    user=cfg["user"], password=cfg["password"])
+        c.cursor().execute(f"CREATE DATABASE IF NOT EXISTS `{cfg['database']}`")
+        c.close()
+    except Exception as e:  # on hosted DB the database already exists
+        print("DB create skipped:", e)
+    conn = mysql.connector.connect(**cfg)
+    cur = conn.cursor()
     with open(os.path.join(BASE_DIR, "schema.sql"), encoding="utf-8") as f:
-        conn.executescript(f.read())
+        for stmt in f.read().split(";"):
+            if stmt.strip():
+                cur.execute(stmt)
+    try:  # add the 'citizen' role to an already existing users table
+        cur.execute("ALTER TABLE users MODIFY role ENUM('admin','investigator','evidence_officer',"
+                    "'viewer','citizen') NOT NULL DEFAULT 'viewer'")
+    except Exception as e:
+        print("Role migration skipped:", e)
+    conn.commit()
     conn.close()
 
 
@@ -123,16 +142,21 @@ def log(action, case_id=None, details=""):
             (uid, action, case_id, details[:250]))
 
 
+CITIZEN_OK = {"my_complaints", "complaint_new", "case_view", "evidence_upload",
+              "logout", "login", "register", "static", "setup"}
+
+
+@app.before_request
+def citizen_guard():
+    """Citizens may only use their own complaint pages."""
+    if (current_user.is_authenticated and current_user.role == "citizen"
+            and request.endpoint and request.endpoint not in CITIZEN_OK):
+        abort(403)
+
+
 @app.template_filter("dt")
 def fmt_dt(v, f="%Y-%m-%d %H:%M"):
-    if not v:
-        return "-"
-    if isinstance(v, str):
-        try:
-            v = datetime.fromisoformat(v.replace("Z", "+00:00"))
-        except ValueError:
-            return v
-    return v.strftime(f)
+    return v.strftime(f) if v else "-"
 
 
 @app.context_processor
@@ -185,6 +209,39 @@ def valid_email(e):
     return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", e or ""))
 
 
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """Public sign-up for complainants (citizens)."""
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        pw, pw2 = request.form.get("password", ""), request.form.get("password2", "")
+        errors = []
+        if not name or len(name) > 100:
+            errors.append("Name is required.")
+        if not valid_email(email):
+            errors.append("Valid email is required.")
+        if len(pw) < 8:
+            errors.append("Password must be at least 8 characters.")
+        if pw != pw2:
+            errors.append("Passwords do not match.")
+        if query("SELECT id FROM users WHERE email=%s", (email,), one=True):
+            errors.append("This email is already registered.")
+        if errors:
+            for e in errors:
+                flash(e, "danger")
+        else:
+            execute("INSERT INTO users (name,email,password_hash,role) VALUES (%s,%s,%s,'citizen')",
+                    (name, email, generate_password_hash(pw)))
+            execute("INSERT INTO activity_logs (user_id, action, details) VALUES (NULL,'CITIZEN_REGISTERED',%s)",
+                    (email[:200],))
+            flash("Account created. Please log in.", "success")
+            return redirect(url_for("login"))
+    return render_template("register.html")
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if query("SELECT COUNT(*) n FROM users", one=True)["n"] == 0:
@@ -195,7 +252,7 @@ def login():
         if row and row["active"] and check_password_hash(row["password_hash"], request.form.get("password", "")):
             login_user(User(row))
             log("LOGIN", details=email)
-            return redirect(url_for("dashboard"))
+            return redirect(url_for("complaint_new" if row["role"] == "citizen" else "dashboard"))
         execute("INSERT INTO activity_logs (user_id, action, details) VALUES (NULL,'LOGIN_FAILED',%s)", (email[:200],))
         flash("Invalid email or password, or account disabled.", "danger")
     return render_template("login.html")
@@ -213,6 +270,8 @@ def logout():
 @app.route("/")
 @login_required
 def dashboard():
+    if current_user.role == "citizen":
+        return redirect(url_for("complaint_new"))
     mine = current_user.role == "investigator"  # officers see only their own cases
     cond = " AND c.officer_id IN (SELECT id FROM officers WHERE user_id=%s)" if mine else ""
     a = (current_user.id,) if mine else ()
@@ -234,9 +293,8 @@ def dashboard():
                   " GROUP BY c.case_type ORDER BY n DESC", a)
     status = query("SELECT c.status label, COUNT(*) n FROM cases c WHERE 1=1" + cond +
                    " GROUP BY c.status", a)
-    monthly = query("SELECT CAST(strftime('%Y', c.created_at) AS INTEGER) y, "
-                    "CAST(strftime('%m', c.created_at) AS INTEGER) m, COUNT(*) n FROM cases c "
-                    "WHERE c.created_at >= date('now', '-12 months')" + cond +
+    monthly = query("SELECT YEAR(c.created_at) y, MONTH(c.created_at) m, COUNT(*) n FROM cases c "
+                    "WHERE c.created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)" + cond +
                     " GROUP BY y, m ORDER BY y, m", a)
     chart = {
         "types": {"labels": [r["label"] for r in types], "values": [r["n"] for r in types]},
@@ -244,7 +302,11 @@ def dashboard():
         "monthly": {"labels": [f"{r['y']}-{r['m']:02d}" for r in monthly], "values": [r["n"] for r in monthly]},
     }
     recent = query(CASE_SQL + " WHERE 1=1" + cond + " ORDER BY c.created_at DESC LIMIT 5", a)
-    return render_template("dashboard.html", stats=stats, chart=chart, recent=recent)
+    unassigned = 0
+    if current_user.role == "admin":
+        unassigned = query("SELECT COUNT(*) n FROM cases WHERE officer_id IS NULL AND status='Pending'",
+                           one=True)["n"]
+    return render_template("dashboard.html", stats=stats, chart=chart, recent=recent, unassigned=unassigned)
 
 
 # ------------------------------------------------------------------ CASES
@@ -270,6 +332,14 @@ def can_edit_case(c):
 
 def can_handle_evidence(c):
     return current_user.role in ("admin", "evidence_officer") or assigned_to_me(c)
+
+
+def is_owner(c):
+    return current_user.role == "citizen" and c["created_by"] == current_user.id
+
+
+def can_upload(c):
+    return can_handle_evidence(c) or (is_owner(c) and c["status"] != "Resolved")
 
 
 def officer_choices():
@@ -306,6 +376,48 @@ def read_officer_id():
     if not query("SELECT id FROM officers WHERE id=%s", (oid,), one=True):
         abort(400)
     return oid
+
+
+def citizen_cases():
+    return query(CASE_SQL + " WHERE c.created_by=%s ORDER BY c.created_at DESC", (current_user.id,))
+
+
+@app.route("/my-complaints")
+@roles_required("citizen")
+def my_complaints():
+    return render_template("my_complaints.html", cases=citizen_cases(), form={}, crime_types=CRIME_TYPES)
+
+
+@app.route("/complaint/new", methods=["GET", "POST"])
+@roles_required("citizen")
+def complaint_new():
+    if request.method == "GET":
+        return redirect(url_for("my_complaints"))
+    form = {k: request.form.get(k, "").strip() for k in ("title", "contact_number", "case_type", "description")}
+    errors = []
+    if not form["title"] or len(form["title"]) > 200:
+        errors.append("Subject is required (max 200 characters).")
+    if not form["contact_number"] or not re.fullmatch(r"[0-9+\-\s]{7,20}", form["contact_number"]):
+        errors.append("A valid contact number is required.")
+    if form["case_type"] not in CRIME_TYPES:
+        errors.append("Please choose a crime type.")
+    if len(form["description"]) < 20:
+        errors.append("Please describe the incident (at least 20 characters).")
+    if errors:
+        for e in errors:
+            flash(e, "danger")
+        return render_template("my_complaints.html", cases=citizen_cases(), form=form, crime_types=CRIME_TYPES)
+    cid = execute(
+        "INSERT INTO cases (case_number,title,complainant_name,contact_number,case_type,"
+        "description,priority,status,officer_id,created_by) "
+        "VALUES (%s,%s,%s,%s,%s,%s,'Medium','Pending',NULL,%s)",
+        ("TMP-" + uuid.uuid4().hex[:20], form["title"], current_user.name,
+         form["contact_number"], form["case_type"], form["description"], current_user.id))
+    number = f"CC-{date.today().year}-{cid:04d}"
+    execute("UPDATE cases SET case_number=%s WHERE id=%s", (number, cid))
+    log("COMPLAINT_FILED", cid, number)
+    flash(f"Complaint registered. Your case number is {number}.", "success")
+    return redirect(url_for("case_view", cid=cid))
 
 
 @app.route("/cases")
@@ -367,13 +479,18 @@ def case_new():
 @login_required
 def case_view(cid):
     c = get_case(cid)
+    if current_user.role == "citizen" and not is_owner(c):
+        abort(403)
     ev = query("SELECT e.*, u.name uploader_name, h.name holder_name FROM evidence e "
                "LEFT JOIN users u ON e.uploaded_by=u.id LEFT JOIN users h ON e.current_holder_id=h.id "
                "WHERE e.case_id=%s ORDER BY e.uploaded_at DESC", (cid,))
     timeline = query("SELECT l.*, u.name FROM activity_logs l LEFT JOIN users u ON l.user_id=u.id "
                      "WHERE l.case_id=%s ORDER BY l.timestamp DESC, l.id DESC LIMIT 50", (cid,))
+    if current_user.role == "citizen":
+        timeline = []
     return render_template("case_view.html", case=c, evidence=ev, timeline=timeline,
-                           can_edit=can_edit_case(c), can_ev=can_handle_evidence(c))
+                           can_edit=can_edit_case(c), can_ev=can_handle_evidence(c),
+                           can_upload=can_upload(c))
 
 
 @app.route("/cases/<int:cid>/edit", methods=["GET", "POST"])
@@ -449,7 +566,7 @@ def get_evidence(eid):
 @login_required
 def evidence_upload(cid):
     c = get_case(cid)
-    if not can_handle_evidence(c):
+    if not can_upload(c):
         abort(403)
     f = request.files.get("file")
     if not f or not f.filename:
@@ -462,11 +579,14 @@ def evidence_upload(cid):
     stored = uuid.uuid4().hex + ext
     path = os.path.join(UPLOAD_DIR, stored)
     f.save(path)
+    by_citizen = current_user.role == "citizen"
+    holder = None if by_citizen else current_user.id
     eid = execute("INSERT INTO evidence (case_id,file_name,file_path,file_hash,file_size,description,"
                   "uploaded_by,current_holder_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
                   (cid, os.path.basename(f.filename)[:255], stored, sha256_of(path), os.path.getsize(path),
-                   request.form.get("description", "").strip()[:255], current_user.id, current_user.id))
-    custody(eid, "Uploaded", note="Evidence uploaded, SHA-256 recorded")
+                   request.form.get("description", "").strip()[:255], current_user.id, holder))
+    custody(eid, "Uploaded", note="Submitted by complainant, SHA-256 recorded" if by_citizen
+            else "Evidence uploaded, SHA-256 recorded")
     log("EVIDENCE_UPLOADED", cid, f"{c['case_number']}: {f.filename}")
     flash("Evidence uploaded and SHA-256 hash recorded.", "success")
     return redirect(url_for("case_view", cid=cid))
@@ -480,7 +600,7 @@ def evidence_view(eid):
     logs = query("SELECT l.*, u.name actor, t.name target FROM custody_log l "
                  "LEFT JOIN users u ON l.user_id=u.id LEFT JOIN users t ON l.to_user_id=t.id "
                  "WHERE l.evidence_id=%s ORDER BY l.timestamp, l.id", (eid,))
-    people = query("SELECT id, name, role FROM users WHERE active=1 AND role<>'viewer' ORDER BY name")
+    people = query("SELECT id, name, role FROM users WHERE active=1 AND role NOT IN ('viewer','citizen') ORDER BY name")
     is_image = e["file_path"].lower().endswith((".jpg", ".jpeg", ".png"))
     return render_template("evidence_view.html", e=e, case=c, logs=logs, people=people, is_image=is_image)
 
@@ -528,7 +648,7 @@ def evidence_transfer(eid):
         to = int(request.form.get("to_user", ""))
     except ValueError:
         abort(400)
-    target = query("SELECT id, name FROM users WHERE id=%s AND active=1 AND role<>'viewer'", (to,), one=True)
+    target = query("SELECT id, name FROM users WHERE id=%s AND active=1 AND role NOT IN ('viewer','citizen')", (to,), one=True)
     if not target:
         abort(400)
     custody(eid, "Transferred", to_user=to, note=request.form.get("note", "").strip())
@@ -675,8 +795,8 @@ def report_monthly():
     if not re.fullmatch(r"\d{4}-\d{2}", month):
         abort(400)
     y, m = int(month[:4]), int(month[5:])
-    rows = query(CASE_SQL + " WHERE strftime('%Y', c.created_at)=? AND strftime('%m', c.created_at)=? ORDER BY c.created_at",
-                 (str(y), f"{m:02d}"))
+    rows = query(CASE_SQL + " WHERE YEAR(c.created_at)=%s AND MONTH(c.created_at)=%s ORDER BY c.created_at",
+                 (y, m))
     by_type, by_status = {}, {}
     for r in rows:
         by_type[r["case_type"]] = by_type.get(r["case_type"], 0) + 1

@@ -1,11 +1,15 @@
 {% extends "base.html" %}{% block content %}
-<h3 class="mb-3">Dashboard</h3>
+<h3 class="page-title"><i class="bi bi-speedometer2"></i> Dashboard</h3>
+{% if unassigned %}<div class="alert alert-warning"><i class="bi bi-exclamation-triangle-fill"></i> {{ unassigned }} new complaint(s) are waiting for an officer.
+ <a href="{{ url_for('cases', status='Pending') }}">Review and assign</a></div>{% endif %}
 <div class="row g-3">
- {% for label, val, color in [('Total Cases', stats.total, '#0d6efd'), ('Pending', stats.pending, '#ffc107'),
-   ('Under Investigation', stats.investigating, '#fd7e14'), ('Resolved', stats.resolved, '#198754'),
-   ('Evidence Files', stats.evidence, '#6f42c1'), ('Investigation Officers', stats.officers, '#20c997')] %}
- <div class="col-6 col-lg-2"><div class="card stat p-3" style="border-left-color:{{ color }}">
-   <h2>{{ val }}</h2><small class="text-muted">{{ label }}</small></div></div>
+ {% for label, val, color, icon in [('Total Cases', stats.total, '#2563eb', 'bi-folder2-open'), ('Pending', stats.pending, '#f59e0b', 'bi-hourglass-split'),
+   ('Under Investigation', stats.investigating, '#f97316', 'bi-search'), ('Resolved', stats.resolved, '#16a34a', 'bi-check-circle'),
+   ('Evidence Files', stats.evidence, '#7c3aed', 'bi-file-earmark-lock2'), ('Investigation Officers', stats.officers, '#0d9488', 'bi-person-badge')] %}
+ <div class="col-6 col-md-4 col-xl-2"><div class="card stat p-3" style="border-left-color:{{ color }}!important">
+  <div class="d-flex align-items-center gap-2">
+   <div class="stat-icon" style="background:{{ color }}22;color:{{ color }}"><i class="bi {{ icon }}"></i></div>
+   <div><h2>{{ val }}</h2><small class="text-muted">{{ label }}</small></div></div></div></div>
  {% endfor %}
 </div>
 <div class="row g-3 mt-1">
@@ -19,6 +23,7 @@
   <span class="badge bg-secondary">{{ c.status }}</span></a>
  {% else %}<span class="text-muted">No cases yet.</span>{% endfor %}
 </div>
+{% include '_about.html' %}
 {% endblock %}
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>

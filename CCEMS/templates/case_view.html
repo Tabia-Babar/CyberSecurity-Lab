@@ -2,7 +2,7 @@
 <div class="d-flex justify-content-between flex-wrap gap-2">
  <h3>{{ case.case_number }} — {{ case.title }}</h3>
  <div>
-  <a class="btn btn-outline-dark btn-sm" href="{{ url_for('report_case', cid=case.id) }}">📄 PDF Report</a>
+  {% if current_user.role != 'citizen' %}<a class="btn btn-outline-dark btn-sm" href="{{ url_for('report_case', cid=case.id) }}">📄 PDF Report</a>{% endif %}
   {% if can_edit %}<a class="btn btn-warning btn-sm" href="{{ url_for('case_edit', cid=case.id) }}">Edit / Update Status</a>{% endif %}
   {% if current_user.role == 'admin' %}
   <form method="post" action="{{ url_for('case_delete', cid=case.id) }}" class="d-inline" onsubmit="return confirm('Delete this case and all its evidence?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -21,23 +21,35 @@
   <div class="col-md-4"><b>Updated:</b> {{ case.updated_at|dt }}</div>
  </div><hr><div style="white-space:pre-wrap">{{ case.description }}</div>
 </div>
+{% if current_user.role == 'citizen' %}<div class="alert alert-info">
+ {% if case.status == 'Pending' %}Your complaint has been received. An officer will be assigned soon.
+ {% elif case.status == 'Investigating' %}Your case is under investigation by {{ case.officer_name }}.
+ {% else %}Your case has been marked as resolved.{% endif %}</div>{% endif %}
 <h5>Evidence</h5>
-{% if can_ev %}
+{% if can_upload %}
 <form method="post" action="{{ url_for('evidence_upload', cid=case.id) }}" enctype="multipart/form-data" class="row g-2 mb-3"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
  <div class="col-md-4"><input type="file" class="form-control" name="file" accept=".jpg,.jpeg,.png,.pdf" required></div>
  <div class="col-md-5"><input class="form-control" name="description" placeholder="Evidence description"></div>
  <div class="col-md-3"><button class="btn btn-success w-100">Upload + SHA-256</button></div>
 </form>{% endif %}
 <div class="table-responsive"><table class="table bg-white align-middle">
+{% if current_user.role == 'citizen' %}
+<tr><th>File</th><th>Description</th><th>Submitted</th></tr>
+{% for e in evidence %}<tr><td>{{ e.file_name }}</td><td>{{ e.description }}</td><td>{{ e.uploaded_at|dt }}</td></tr>
+{% else %}<tr><td colspan="3" class="text-muted text-center">No evidence yet</td></tr>{% endfor %}
+{% else %}
 <tr><th>File</th><th>Description</th><th>SHA-256</th><th>Uploaded by</th><th>Holder</th><th></th></tr>
 {% for e in evidence %}
 <tr><td>{{ e.file_name }}</td><td>{{ e.description }}</td><td class="hash">{{ e.file_hash }}</td>
 <td>{{ e.uploader_name or '-' }}<br><small>{{ e.uploaded_at|dt }}</small></td><td>{{ e.holder_name or '-' }}</td>
 <td>{% if can_ev %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('evidence_view', eid=e.id) }}">Open</a>{% endif %}</td></tr>
 {% else %}<tr><td colspan="6" class="text-muted text-center">No evidence yet</td></tr>{% endfor %}
+{% endif %}
 </table></div>
+{% if current_user.role != 'citizen' %}
 <h5 class="mt-4">Case Tracking Timeline</h5>
 <ul class="list-group">
 {% for t in timeline %}<li class="list-group-item small"><b>{{ t.timestamp|dt }}</b> — {{ t.name or 'System' }}: {{ t.action }} <span class="text-muted">{{ t.details }}</span></li>
 {% else %}<li class="list-group-item text-muted">No activity yet</li>{% endfor %}
-</ul>{% endblock %}
+</ul>{% endif %}
+{% endblock %}

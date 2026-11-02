@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block content %}
+<h3>File a Complaint</h3>
+<form method="post" class="card p-3"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+ <label>Subject *</label>
+ <input class="form-control mb-2" name="title" maxlength="200" value="{{ form.get('title','') }}" placeholder="e.g. Fake bank SMS asking for my card details" required>
+ <div class="row">
+  <div class="col-md-6 mb-2"><label>Type of Cybercrime *</label><select class="form-select" name="case_type">
+   {% for x in crime_types %}<option {{ 'selected' if form.get('case_type')==x }}>{{ x }}</option>{% endfor %}</select></div>
+  <div class="col-md-6 mb-2"><label>Contact Number *</label>
+   <input class="form-control" name="contact_number" value="{{ form.get('contact_number','') }}" required></div>
+ </div>
+ <label>What happened? *</label>
+ <textarea class="form-control mb-2" name="description" rows="6" placeholder="Date, time, how it happened, amount lost, websites or numbers involved..." required>{{ form.get('description','') }}</textarea>
+ <p class="small text-muted">After submitting you can upload screenshots or PDF proof on your complaint page.</p>
+ <div><button class="btn btn-primary">Submit Complaint</button> <a class="btn btn-light" href="{{ url_for('my_complaints') }}">Cancel</a></div>
+</form>{% endblock %}

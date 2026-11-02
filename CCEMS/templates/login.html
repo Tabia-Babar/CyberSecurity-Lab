@@ -1,8 +1,34 @@
 {% extends "base.html" %}{% block content %}
-<div class="col-md-4 mx-auto card p-4 mt-5 shadow-sm">
-<h4 class="text-center">🛡️ CCEMS</h4>
-<p class="text-center text-muted small">Cybercrime Case &amp; Evidence Management System</p>
-<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
- <input class="form-control mb-2" type="email" name="email" placeholder="Email" required autofocus>
- <input class="form-control mb-3" type="password" name="password" placeholder="Password" required>
- <button class="btn btn-dark w-100">Login</button></form></div>{% endblock %}
+<div class="row g-4 align-items-stretch mt-1">
+ <div class="col-lg-6">
+  <div class="hero">
+   <i class="bi bi-shield-lock-fill big-icon"></i>
+   <h1>CCEMS</h1>
+   <div class="sub">Cyber Crime Evidence Management System</div>
+   <ul>
+    <li><i class="bi bi-folder2-open"></i> Organized cybercrime case management</li>
+    <li><i class="bi bi-fingerprint"></i> Evidence protected with SHA-256 integrity checks</li>
+    <li><i class="bi bi-diagram-3"></i> Complete chain of custody and audit trail</li>
+    <li><i class="bi bi-person-lock"></i> Role-based secure access for every user</li>
+   </ul>
+  </div>
+ </div>
+ <div class="col-lg-5 mx-auto">
+  <div class="card login-card hover-lift">
+   <h4 class="fw-bold mb-1"><i class="bi bi-box-arrow-in-right text-primary"></i> Sign In</h4>
+   <p class="text-muted small">Access your CCEMS account</p>
+   <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="input-group mb-3"><span class="input-group-text"><i class="bi bi-envelope"></i></span>
+     <input class="form-control" type="email" name="email" placeholder="Email" required autofocus></div>
+    <div class="input-group mb-3"><span class="input-group-text"><i class="bi bi-key"></i></span>
+     <input class="form-control" type="password" name="password" placeholder="Password" required></div>
+    <button class="btn btn-dark w-100 py-2"><i class="bi bi-box-arrow-in-right"></i> Login</button>
+   </form>
+   <hr>
+   <p class="text-center small mb-0">Need to report a cybercrime?<br>
+    <a href="{{ url_for('register') }}"><i class="bi bi-person-plus"></i> Create a complainant account</a></p>
+  </div>
+ </div>
+</div>
+{% include '_about.html' %}
+{% endblock %}

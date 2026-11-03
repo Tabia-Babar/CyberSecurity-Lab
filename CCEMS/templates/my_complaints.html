@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block content %}
 <h3 class="page-title"><i class="bi bi-chat-square-text"></i> Complaint Portal</h3>
-<div class="card p-3 mb-4">
+<div class="card p-3 mb-4" id="file-complaint">
  <h5><i class="bi bi-pencil-square text-primary"></i> File a New Complaint</h5>
  <form method="post" action="{{ url_for('complaint_new') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Subject *</label>
@@ -16,7 +16,7 @@
   <button class="btn btn-primary"><i class="bi bi-send"></i> Submit Complaint</button>
  </form>
 </div>
-<h5><i class="bi bi-list-check text-primary"></i> My Complaints &amp; Status</h5>
+<h5 id="my-list"><i class="bi bi-list-check text-primary"></i> My Complaints &amp; Status</h5>
 <div class="table-responsive"><table class="table table-hover bg-white align-middle">
 <tr><th>Case No</th><th>Subject</th><th>Type</th><th>Status</th><th>Assigned Officer</th><th>Filed on</th></tr>
 {% for c in cases %}

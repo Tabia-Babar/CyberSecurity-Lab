@@ -1,6 +1,6 @@
 {% extends "base.html" %}{% block content %}
-<div class="d-flex justify-content-between mb-2"><h3>Cases</h3>
-{% if current_user.role in ('admin','investigator') %}<a class="btn btn-primary" href="{{ url_for('case_new') }}">+ Register Case</a>{% endif %}</div>
+<div class="d-flex justify-content-between mb-2"><h3 class="page-title"><i class="bi bi-folder2-open"></i> {{ 'Cases' if current_user.role == 'admin' else 'My Cases' }}</h3>
+{% if current_user.role == 'admin' %}<a class="btn btn-primary" href="{{ url_for('case_new') }}">+ Register Case</a>{% endif %}</div>
 <form class="row g-2 mb-3" method="get">
  <div class="col-md-3"><input class="form-control" name="q" value="{{ f.q }}" placeholder="Case no / complainant / title"></div>
  <div class="col-md-2"><select class="form-select" name="type"><option value="">All types</option>
@@ -17,6 +17,6 @@
 <tr><td><a href="{{ url_for('case_view', cid=c.id) }}">{{ c.case_number }}</a></td><td>{{ c.title }}</td>
 <td>{{ c.complainant_name }}</td><td>{{ c.case_type }}</td><td>{{ c.priority }}</td>
 <td><span class="badge bg-{{ {'Pending':'warning','Investigating':'primary','Resolved':'success'}[c.status] }}">{{ c.status }}</span></td>
-<td>{{ c.officer_name or '-' }}</td><td>{{ c.created_at|dt('%Y-%m-%d') }}</td></tr>
+<td>{% if c.officer_name %}{{ c.officer_name }}{% else %}<span class="badge bg-danger">Unassigned</span>{% endif %}</td><td>{{ c.created_at|dt('%Y-%m-%d') }}</td></tr>
 {% else %}<tr><td colspan="8" class="text-center text-muted">No cases found</td></tr>{% endfor %}
 </table></div>{% endblock %}

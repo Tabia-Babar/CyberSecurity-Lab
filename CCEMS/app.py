@@ -110,7 +110,9 @@ class User(UserMixin):
         self.id = row["id"]
         self.name = row["name"]
         self.email = row["email"]
-        self.role = row["role"]
+        # Only 3 account types are used: admin, investigator, citizen.
+        # Any other stored role (viewer / evidence_officer) gets the complainant portal.
+        self.role = "citizen" if row["role"] in ("viewer", "evidence_officer") else row["role"]
         self._active = bool(row["active"])
 
     @property
@@ -272,9 +274,7 @@ def logout():
 def dashboard():
     if current_user.role == "citizen":
         return redirect(url_for("complaint_new"))
-    mine = current_user.role == "investigator"  # officers see only their own cases
-    cond = " AND c.officer_id IN (SELECT id FROM officers WHERE user_id=%s)" if mine else ""
-    a = (current_user.id,) if mine else ()
+    cond, a = scope_clause()  # non-admin users only see their own / assigned cases
 
     def cnt(extra=""):
         return query("SELECT COUNT(*) n FROM cases c WHERE 1=1" + extra + cond, a, one=True)["n"]
@@ -326,12 +326,35 @@ def assigned_to_me(c):
     return current_user.role == "investigator" and c["officer_user_id"] == current_user.id
 
 
+def scope_clause():
+    """SQL fragment limiting cases to what the logged-in user may see (alias c)."""
+    r, uid = current_user.role, current_user.id
+    if r == "admin":
+        return "", ()
+    if r == "investigator":
+        return (" AND (c.officer_id IN (SELECT id FROM officers WHERE user_id=%s) OR c.created_by=%s)",
+                (uid, uid))
+    if r == "evidence_officer":
+        return (" AND (c.created_by=%s OR c.id IN (SELECT case_id FROM evidence "
+                "WHERE uploaded_by=%s OR current_holder_id=%s))", (uid, uid, uid))
+    return " AND c.created_by=%s", (uid,)  # citizen, viewer: only their own cases
+
+
+def can_view_case(c):
+    if current_user.role == "admin":
+        return True
+    frag, args = scope_clause()
+    return query("SELECT c.id FROM cases c WHERE c.id=%s" + frag, (c["id"],) + tuple(args), one=True) is not None
+
+
 def can_edit_case(c):
     return current_user.role == "admin" or assigned_to_me(c)
 
 
 def can_handle_evidence(c):
-    return current_user.role in ("admin", "evidence_officer") or assigned_to_me(c)
+    if current_user.role == "admin" or assigned_to_me(c):
+        return True
+    return current_user.role == "evidence_officer" and can_view_case(c)
 
 
 def is_owner(c):
@@ -416,8 +439,9 @@ def complaint_new():
     number = f"CC-{date.today().year}-{cid:04d}"
     execute("UPDATE cases SET case_number=%s WHERE id=%s", (number, cid))
     log("COMPLAINT_FILED", cid, number)
-    flash(f"Complaint registered. Your case number is {number}.", "success")
-    return redirect(url_for("case_view", cid=cid))
+    flash(f"Complaint registered successfully. Your case number is {number}. "
+          "It has been sent to the admin for review and officer assignment.", "success")
+    return redirect(url_for("my_complaints"))
 
 
 @app.route("/cases")
@@ -428,7 +452,8 @@ def cases():
     status = request.args.get("status", "")
     d_from = request.args.get("from", "")
     d_to = request.args.get("to", "")
-    sql, args = CASE_SQL + " WHERE 1=1", []
+    frag, fargs = scope_clause()
+    sql, args = CASE_SQL + " WHERE 1=1" + frag, list(fargs)
     if q:
         sql += " AND (c.case_number LIKE %s OR c.complainant_name LIKE %s OR c.title LIKE %s)"
         args += [f"%{q}%"] * 3
@@ -446,7 +471,7 @@ def cases():
 
 
 @app.route("/cases/new", methods=["GET", "POST"])
-@roles_required("admin", "investigator")
+@roles_required("admin")
 def case_new():
     form = {}
     if request.method == "POST":
@@ -479,7 +504,7 @@ def case_new():
 @login_required
 def case_view(cid):
     c = get_case(cid)
-    if current_user.role == "citizen" and not is_owner(c):
+    if not can_view_case(c):
         abort(403)
     ev = query("SELECT e.*, u.name uploader_name, h.name holder_name FROM evidence e "
                "LEFT JOIN users u ON e.uploaded_by=u.id LEFT JOIN users h ON e.current_holder_id=h.id "
@@ -742,13 +767,13 @@ def pdf_response(buf, name):
 
 
 @app.route("/reports")
-@login_required
+@roles_required("admin")
 def reports():
     return render_template("reports.html", this_month=date.today().strftime("%Y-%m"))
 
 
 @app.route("/cases/<int:cid>/report.pdf")
-@login_required
+@roles_required("admin")
 def report_case(cid):
     c = get_case(cid)
     blocks = [("h", "Case Details"),
@@ -776,7 +801,7 @@ def report_case(cid):
 
 
 @app.route("/reports/summary.pdf")
-@login_required
+@roles_required("admin")
 def report_summary():
     by = lambda col: [[r["k"], r["n"]] for r in query(f"SELECT {col} k, COUNT(*) n FROM cases GROUP BY {col}")]
     total = query("SELECT COUNT(*) n FROM cases", one=True)["n"]
@@ -789,7 +814,7 @@ def report_summary():
 
 
 @app.route("/reports/monthly.pdf")
-@login_required
+@roles_required("admin")
 def report_monthly():
     month = request.args.get("month", date.today().strftime("%Y-%m"))
     if not re.fullmatch(r"\d{4}-\d{2}", month):
@@ -813,7 +838,7 @@ def report_monthly():
 
 
 @app.route("/reports/officers.pdf")
-@login_required
+@roles_required("admin")
 def report_officers():
     rows = query("SELECT u.name, o.designation, COUNT(c.id) total, "
                  "SUM(c.status='Pending') pending, SUM(c.status='Investigating') investigating, "
@@ -834,7 +859,7 @@ def report_officers():
 
 
 @app.route("/reports/evidence.pdf")
-@login_required
+@roles_required("admin")
 def report_evidence():
     rows = query("SELECT e.*, c.case_number, u.name uploader, h.name holder FROM evidence e "
                  "JOIN cases c ON e.case_id=c.id LEFT JOIN users u ON e.uploaded_by=u.id "

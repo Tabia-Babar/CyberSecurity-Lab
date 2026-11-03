@@ -25,12 +25,13 @@
  <aside class="sidebar">
   <div class="side-label">MENU</div>
   {% if current_user.role == 'citizen' %}
-  <a class="side-link {{ 'active' if ep in ('my_complaints','complaint_new','case_view') }}" href="{{ url_for('my_complaints') }}"><i class="bi bi-chat-square-text"></i> Complaint Portal</a>
+  <a class="side-link {{ 'active' if ep in ('my_complaints','complaint_new','case_view') }}" href="{{ url_for('my_complaints') }}#file-complaint"><i class="bi bi-pencil-square"></i> File a Complaint</a>
+  <a class="side-link" href="{{ url_for('my_complaints') }}#my-list"><i class="bi bi-list-check"></i> My Complaints</a>
   {% else %}
-  <a class="side-link {{ 'active' if ep == 'dashboard' }}" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2"></i> Dashboard</a>
-  <a class="side-link {{ 'active' if ep.startswith('case') or ep.startswith('evidence') }}" href="{{ url_for('cases') }}"><i class="bi bi-folder2-open"></i> Cases</a>
-  <a class="side-link {{ 'active' if ep.startswith('report') }}" href="{{ url_for('reports') }}"><i class="bi bi-file-earmark-bar-graph"></i> Reports</a>
+  <a class="side-link {{ 'active' if ep == 'dashboard' }}" href="{{ url_for('dashboard') }}"><i class="bi bi-speedometer2"></i> {{ 'Dashboard' if current_user.role == 'admin' else 'My Dashboard' }}</a>
+  <a class="side-link {{ 'active' if ep.startswith('case') or ep.startswith('evidence') }}" href="{{ url_for('cases') }}"><i class="bi bi-folder2-open"></i> {{ 'Cases' if current_user.role == 'admin' else 'My Cases' }}</a>
   {% if current_user.role == 'admin' %}
+  <a class="side-link {{ 'active' if ep.startswith('report') }}" href="{{ url_for('reports') }}"><i class="bi bi-file-earmark-bar-graph"></i> Reports</a>
   <a class="side-link {{ 'active' if ep.startswith('user') }}" href="{{ url_for('users') }}"><i class="bi bi-people"></i> Users</a>
   <a class="side-link {{ 'active' if ep == 'logs' }}" href="{{ url_for('logs') }}"><i class="bi bi-clock-history"></i> Activity Logs</a>
   {% endif %}

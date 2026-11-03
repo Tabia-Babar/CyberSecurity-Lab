@@ -3,7 +3,12 @@
 <form method="post" class="card p-3 col-md-6"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
  <input class="form-control mb-2" name="name" placeholder="Full name" required>
  <input class="form-control mb-2" type="email" name="email" placeholder="Email" required>
- <select class="form-select mb-2" name="role">{% for k, v in roles.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+ <label class="small text-muted">Account type</label>
+ <select class="form-select mb-2" name="role">
+  <option value="investigator">Investigation Officer (sees only assigned cases)</option>
+  <option value="citizen">Complainant / Citizen (files own complaint)</option>
+  <option value="admin">Admin (full access)</option>
+ </select>
  <input class="form-control mb-2" name="designation" placeholder="Designation (officers only, e.g. Inspector)">
  <input class="form-control mb-2" name="department" placeholder="Department (officers only)">
  <input class="form-control mb-2" name="contact" placeholder="Contact (officers only)">

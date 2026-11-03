@@ -1,8 +1,10 @@
 {% extends "base.html" %}{% block content %}
+{% if current_user.role == 'citizen' %}<a class="btn btn-light btn-sm mb-2" href="{{ url_for('my_complaints') }}"><i class="bi bi-arrow-left"></i> Back to Complaint Portal</a>{% endif %}
+{% if current_user.role == 'citizen' %}<a href="{{ url_for('complaint_new') }}">← Back to my complaints</a>{% endif %}
 <div class="d-flex justify-content-between flex-wrap gap-2">
  <h3>{{ case.case_number }} — {{ case.title }}</h3>
  <div>
-  {% if current_user.role != 'citizen' %}<a class="btn btn-outline-dark btn-sm" href="{{ url_for('report_case', cid=case.id) }}">📄 PDF Report</a>{% endif %}
+  {% if current_user.role == 'admin' %}<a class="btn btn-outline-dark btn-sm" href="{{ url_for('report_case', cid=case.id) }}">📄 PDF Report</a>{% endif %}
   {% if can_edit %}<a class="btn btn-warning btn-sm" href="{{ url_for('case_edit', cid=case.id) }}">Edit / Update Status</a>{% endif %}
   {% if current_user.role == 'admin' %}
   <form method="post" action="{{ url_for('case_delete', cid=case.id) }}" class="d-inline" onsubmit="return confirm('Delete this case and all its evidence?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -13,7 +15,7 @@
  <div class="row">
   <div class="col-md-4"><b>Type:</b> {{ case.case_type }}</div>
   <div class="col-md-4"><b>Priority:</b> {{ case.priority }}</div>
-  <div class="col-md-4"><b>Status:</b> <span class="badge bg-primary">{{ case.status }}</span></div>
+  <div class="col-md-4"><b>Status:</b> <span class="badge bg-primary">{{ 'In Process' if (current_user.role == 'citizen' and case.status == 'Investigating') else case.status }}</span></div>
   <div class="col-md-4"><b>Complainant:</b> {{ case.complainant_name }}</div>
   <div class="col-md-4"><b>Contact:</b> {{ case.contact_number or '-' }}</div>
   <div class="col-md-4"><b>Officer:</b> {{ case.officer_name or 'Unassigned' }}</div>

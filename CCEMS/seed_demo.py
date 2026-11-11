@@ -22,10 +22,10 @@ with app.app_context():
         raise SystemExit
     officer_ids = []
     for name, email, role, off in USERS:
-        uid = execute("INSERT INTO users (name,email,password_hash,role) VALUES (?,?,?,?)",
+        uid = execute("INSERT INTO users (name,email,password_hash,role) VALUES (%s,%s,%s,%s)",
                       (name, email, generate_password_hash(PASSWORD), role))
         if off:
-            oid = execute("INSERT INTO officers (user_id,designation,department,contact) VALUES (?,?,?,?)",
+            oid = execute("INSERT INTO officers (user_id,designation,department,contact) VALUES (%s,%s,%s,%s)",
                           (uid, *off))
             if role == "investigator":
                 officer_ids.append(oid)
@@ -33,10 +33,10 @@ with app.app_context():
         created = datetime.now() - timedelta(days=random.randint(0, 200))
         cid = execute(
             "INSERT INTO cases (case_number,title,complainant_name,contact_number,case_type,description,"
-            "priority,status,officer_id,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "priority,status,officer_id,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             (f"TMP-{i}", random.choice(TITLES), random.choice(NAMES), "0300-0000000", random.choice(TYPES),
              "Demo case with fake data.", random.choice(["Low", "Medium", "High", "Critical"]),
              random.choice(["Pending", "Investigating", "Resolved"]), random.choice(officer_ids), created))
-        execute("UPDATE cases SET case_number=? WHERE id=?", (f"CC-{created.year}-{cid:04d}", cid))
+        execute("UPDATE cases SET case_number=%s WHERE id=%s", (f"CC-{created.year}-{cid:04d}", cid))
     print("Demo data created. Login password for all users:", PASSWORD)
     print("Emails: admin@ccems.test, ayesha@ccems.test, bilal@ccems.test, sara@ccems.test, viewer@ccems.test")

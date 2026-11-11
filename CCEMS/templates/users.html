@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% block content %}
-<div class="d-flex justify-content-between mb-2"><h3>User & Officer Management</h3>
+<div class="d-flex justify-content-between mb-2"><h3 class="page-title"><i class="bi bi-people"></i> User &amp; Officer Management</h3>
 <a class="btn btn-primary" href="{{ url_for('user_new') }}">+ Add User</a></div>
 <div class="table-responsive"><table class="table bg-white align-middle">
 <tr><th>Name</th><th>Email</th><th>Role</th><th>Designation / Dept</th><th>Status</th><th>Actions</th></tr>
@@ -10,6 +10,13 @@
 <td class="d-flex gap-1">
  <form method="post" action="{{ url_for('user_toggle', uid=u.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <button class="btn btn-sm btn-outline-secondary">{{ 'Disable' if u.active else 'Enable' }}</button></form>
+ <form method="post" action="{{ url_for('user_role', uid=u.id) }}" class="d-flex gap-1"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <select class="form-select form-select-sm" name="role" {{ 'disabled' if u.id == current_user.id }}>
+   <option value="citizen" {{ 'selected' if u.role in ('citizen','viewer','evidence_officer') }}>Complainant</option>
+   <option value="investigator" {{ 'selected' if u.role == 'investigator' }}>Officer</option>
+   <option value="admin" {{ 'selected' if u.role == 'admin' }}>Admin</option>
+  </select>
+  <button class="btn btn-sm btn-outline-primary" {{ 'disabled' if u.id == current_user.id }}>Set</button></form>
  <form method="post" action="{{ url_for('user_password', uid=u.id) }}" class="d-flex gap-1"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input class="form-control form-control-sm" type="password" name="password" minlength="8" placeholder="New password" required>
   <button class="btn btn-sm btn-outline-dark">Reset</button></form></td></tr>

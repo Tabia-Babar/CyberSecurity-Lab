@@ -12,5 +12,15 @@
  <label>What happened? *</label>
  <textarea class="form-control mb-2" name="description" rows="6" placeholder="Date, time, how it happened, amount lost, websites or numbers involved..." required>{{ form.get('description','') }}</textarea>
  <p class="small text-muted">After submitting you can upload screenshots or PDF proof on your complaint page.</p>
- <div><button class="btn btn-primary">Submit Complaint</button> <a class="btn btn-light" href="{{ url_for('my_complaints') }}">Cancel</a></div>
-</form>{% endblock %}
+ <div><button class="btn btn-primary">Submit Complaint</button> </div>
+</form>
+<h5 class="mt-4">Your Complaints &amp; Updates</h5>
+<div class="table-responsive"><table class="table table-hover bg-white align-middle">
+<tr><th>Case No</th><th>Subject</th><th>Type</th><th>Status</th><th>Officer</th><th>Filed on</th></tr>
+{% for c in cases %}
+<tr><td><a href="{{ url_for('case_view', cid=c.id) }}">{{ c.case_number }}</a></td><td>{{ c.title }}</td><td>{{ c.case_type }}</td>
+<td><span class="badge bg-{{ {'Pending':'warning','Investigating':'primary','Resolved':'success'}[c.status] }}">{{ 'In Process' if c.status == 'Investigating' else c.status }}</span></td>
+<td>{{ c.officer_name or 'Not assigned yet' }}</td><td>{{ c.created_at|dt('%Y-%m-%d') }}</td></tr>
+{% else %}<tr><td colspan="6" class="text-center text-muted">You have not filed any complaint yet.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}
